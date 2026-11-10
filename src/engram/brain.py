@@ -185,5 +185,60 @@ class Brain:
     def forget_user(self, tenant: str, user: str) -> int:
         return self.store.forget_user(tenant, user)
 
+    def graph(self, tenant: str, user: str, *, neighbors: int = 4, min_link: float = 0.3) -> dict:
+        """The brain as a network, for the visual map.
+
+        Nodes: facts ("neurons") and the entities they mention ("concept hubs").
+        Links: similar meaning (each fact to its closest neighbours), mentions
+        (fact -> entity) and replaced (an outdated fact -> the fact that replaced it).
+        """
+        facts = self.store.all_facts(tenant, [user, SHARED_USER])
+        ids = [f.id for f in facts]
+        ents = self.store.entities_for(tenant, ids)
+        eps = self.store.get_episodes(tenant, list({f.episode_id for f in facts}))
+
+        nodes: list[dict] = []
+        links: list[dict] = []
+        for f in facts:
+            nodes.append({**f.as_dict(), "type": "fact", "active": f.valid_to is None,
+                          "superseded_by": f.superseded_by, "shared": f.user_id == SHARED_USER,
+                          "entities": ents.get(f.id, []), "episode": eps.get(f.episode_id)})
+            if f.superseded_by:
+                links.append({"source": f.id, "target": f.superseded_by, "type": "replaced", "weight": 1.0})
+
+        mentions: dict[str, int] = {}
+        for fid, names in ents.items():
+            for name in names:
+                mentions[name] = mentions.get(name, 0) + 1
+                links.append({"source": fid, "target": f"ent:{name}", "type": "mentions", "weight": 0.5})
+        nodes += [{"id": f"ent:{n}", "type": "entity", "name": n, "count": c} for n, c in mentions.items()]
+
+        # Meaning links between facts that are still true. Scores are rescaled so that
+        # "unrelated" is 0 for every embedding model (same calibration as recall).
+        active = [f for f in facts if f.valid_to is None]
+        if len(active) > 1:
+            floor = getattr(self.embedder, "floor", 0.0)
+            m = np.stack([f.embedding for f in active])
+            sims = np.clip((m @ m.T - floor) / (1.0 - floor), 0.0, 1.0)
+            np.fill_diagonal(sims, 0.0)
+            seen: set[tuple[int, int]] = set()
+            for i in range(len(active)):
+                for j in np.argsort(-sims[i])[:neighbors]:
+                    j = int(j)
+                    if sims[i, j] < min_link or (min(i, j), max(i, j)) in seen:
+                        continue
+                    seen.add((min(i, j), max(i, j)))
+                    links.append({"source": active[i].id, "target": active[j].id,
+                                  "type": "similar", "weight": round(float(sims[i, j]), 3)})
+
+        return {"user_id": user, "nodes": nodes, "links": links,
+                "profile": self.store.get_profile(tenant, user),
+                "stats": {"neurons": len(active), "retired": len(facts) - len(active),
+                          "concepts": len(mentions), "connections": len(links),
+                          "messages": len(eps)}}
+
+    def brains(self, tenant: str) -> list[dict]:
+        return [b for b in self.store.list_users(tenant) if b["user_id"] != SHARED_USER]
+
     def stats(self, tenant: str) -> dict:
         return self.store.stats(tenant)

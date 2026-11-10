@@ -65,6 +65,18 @@ cp .env.example .env
 python examples/demo.py
 ```
 
+### See the brain (3D map)
+
+```bash
+engram serve        # then open http://localhost:8000
+```
+
+Every fact is a glowing neuron, coloured by type. Concepts (people, projects, places) are hubs, and
+lines show which memories are related, which mention the same thing, and which replaced an older
+one (red). The brain gets denser and busier as it learns. Ask a question and the neurons that answer
+it light up; click any neuron to zoom in and see the message it came from, its links and its history.
+"Replay growth" shows the brain forming memory by memory.
+
 ### Command line
 
 ```bash
@@ -94,6 +106,8 @@ curl -X POST localhost:8000/v1/recall -H "X-Tenant-Id: acme" -H "Content-Type: a
 | `GET /v1/profile/{user_id}` | Read the profile |
 | `DELETE /v1/episodes/{id}` | Erase one message and every fact derived from it |
 | `DELETE /v1/users/{user_id}` | Erase everything about a user |
+| `GET /v1/brains` | List the brains (users) in a tenant |
+| `GET /v1/graph/{user_id}` | The brain as a network: neurons, concepts and links |
 
 **Multi-tenancy:** set `ENGRAM_API_KEYS="keyA:acme,keyB:globex"` and the tenant comes from the
 `X-API-Key` header, so a client can never read another company's data. Shared company
@@ -149,6 +163,7 @@ src/engram/
   prompts.py    extraction, supersede and profile prompts
   api.py        FastAPI server
   cli.py        command line
+  web/          the 3D brain map (one HTML file, served at /)
 tests/          free tests (fake LLM, hash embeddings)
 reports/        research behind the design
 ```

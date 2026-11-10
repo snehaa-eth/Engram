@@ -1,0 +1,857 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='%237c9bff'/%3E%3C/svg%3E">
+<title>Engram Brain</title>
+<style>
+  :root {
+    --bg: #04050d;
+    --panel: rgba(12, 15, 32, 0.78);
+    --panel-solid: #0c0f20;
+    --line: rgba(140, 160, 255, 0.16);
+    --text: #e6e9ff;
+    --muted: #8d93b8;
+    --accent: #7c9bff;
+    --accent-2: #ff6ad5;
+    --danger: #ff5c7a;
+    --ok: #6dffb0;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  #scene { position: fixed; inset: 0; }
+  button, input, textarea, select { font: inherit; color: inherit; }
+
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+
+  /* left control panel */
+  #left { top: 16px; left: 16px; bottom: 16px; width: 330px; padding: 18px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .logo { width: 28px; height: 28px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fff, var(--accent) 35%, #2a1f6b 70%);
+    box-shadow: 0 0 18px var(--accent); }
+  .brand h1 { font-size: 18px; margin: 0; letter-spacing: .3px; }
+  .brand small { color: var(--muted); display: block; font-size: 12px; }
+  .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted);
+    margin: 0 0 8px; }
+  .row { display: flex; gap: 8px; }
+  select, input[type=text], textarea { width: 100%; background: rgba(255,255,255,.04);
+    border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; outline: none; }
+  select:focus, input:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 64px; }
+  .btn { border: 1px solid var(--line); background: rgba(255,255,255,.05); border-radius: 10px;
+    padding: 9px 12px; cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s; }
+  .btn:hover { background: rgba(255,255,255,.1); border-color: rgba(160,180,255,.35); }
+  .btn.primary { background: linear-gradient(135deg, #5a6cff, #a24bff); border-color: transparent; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.12); }
+  .btn:disabled { opacity: .5; cursor: progress; }
+  .btn.small { padding: 6px 10px; font-size: 13px; }
+  .btn.danger { color: var(--danger); }
+  .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .result { margin-top: 10px; font-size: 13px; border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px; background: rgba(0,0,0,.25); display: none; }
+  .result.show { display: block; }
+  .result .meta { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  .result ul { margin: 0; padding-left: 16px; }
+  .result li { margin: 3px 0; }
+
+  .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 12px; color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+    margin-right: 7px; background: var(--c); box-shadow: 0 0 8px var(--c); vertical-align: middle; }
+  .legend .line::before { width: 16px; height: 2px; border-radius: 1px; }
+  .hintline { color: var(--muted); font-size: 12px; }
+
+  /* top HUD */
+  #hud { top: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 22px; padding: 10px 20px;
+    pointer-events: none; }
+  #hud div { text-align: center; }
+  #hud b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  #hud span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  #replayDate { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); color: var(--muted);
+    font-size: 13px; letter-spacing: 1px; display: none; }
+
+  /* right detail panel */
+  #detail { top: 16px; right: 16px; bottom: 16px; width: 360px; padding: 20px; overflow-y: auto;
+    transform: translateX(calc(100% + 24px)); transition: transform .3s ease; }
+  #detail.open { transform: none; }
+  #detail .close { position: absolute; top: 12px; right: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px;
+    font-size: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.04); margin: 0 6px 6px 0; }
+  .chip.click { cursor: pointer; }
+  .chip.click:hover { border-color: var(--accent); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
+  .fact-text { font-size: 18px; line-height: 1.4; margin: 10px 0 14px; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; font-size: 13px; margin-bottom: 14px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+  blockquote { margin: 0 0 14px; padding: 10px 12px; border-left: 3px solid var(--accent);
+    background: rgba(124,155,255,.07); border-radius: 0 10px 10px 0; font-size: 13px; }
+  .rel { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px;
+    border: 1px solid var(--line); margin-bottom: 6px; cursor: pointer; font-size: 13px; }
+  .rel:hover { border-color: var(--accent); background: rgba(124,155,255,.06); }
+  .rel .bar { flex: 0 0 46px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
+  .rel .bar i { display: block; height: 100%; background: var(--accent); }
+  .rel .txt { flex: 1; }
+  .status-retired { color: var(--danger); }
+  .status-active { color: var(--ok); }
+
+  #hint { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); color: var(--muted);
+    font-size: 12px; pointer-events: none; letter-spacing: .4px; }
+  #empty { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;
+    color: var(--muted); pointer-events: none; display: none; }
+  #empty b { color: var(--text); display: block; font-size: 18px; margin-bottom: 4px; }
+  #toast { position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0;
+    background: var(--panel-solid); border: 1px solid var(--line); padding: 10px 16px; border-radius: 10px;
+    transition: all .25s; pointer-events: none; max-width: min(90vw, 520px); text-align: center; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.err { border-color: var(--danger); }
+  #loading { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); }
+
+  @media (max-width: 860px) {
+    #left { top: auto; left: 16px; right: 16px; bottom: 16px; width: auto; max-height: 46vh; }
+    #detail { top: auto; left: 16px; right: 16px; width: auto; max-height: 60vh; bottom: 16px;
+      transform: translateY(calc(100% + 24px)); }
+    #hud { gap: 12px; padding: 8px 12px; }
+    #hud b { font-size: 16px; }
+    #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<div id="loading">Waking the brain…</div>
+
+<div id="hud" class="panel">
+  <div><b id="sNeurons">0</b><span>Neurons</span></div>
+  <div><b id="sLinks">0</b><span>Connections</span></div>
+  <div><b id="sConcepts">0</b><span>Concepts</span></div>
+  <div><b id="sRetired">0</b><span>Retired</span></div>
+</div>
+<div id="replayDate"></div>
+
+<aside id="left" class="panel">
+  <div class="brand">
+    <div class="logo"></div>
+    <div><h1>Engram</h1><small>Living memory for AI agents</small></div>
+  </div>
+
+  <div>
+    <p class="section-title">Brain</p>
+    <div class="row">
+      <select id="brainSelect" aria-label="Choose a brain"></select>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input type="text" id="newBrain" placeholder="New brain name (e.g. sneha)" aria-label="New brain name">
+      <button class="btn" id="createBrain">Create</button>
+    </div>
+  </div>
+
+  <div>
+    <p class="section-title">Teach it</p>
+    <textarea id="teachText" placeholder="Tell this brain something… e.g. “I lead the payments team at Acme and I’m moving to Bangalore.”"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="btn primary" id="teachBtn" style="flex:1">Remember</button>
+    </div>
+  </div>
+
+  <div>
+    <p class="section-title">Ask it</p>
+    <div class="row">
+      <input type="text" id="askText" placeholder="Where do I live now?" aria-label="Question">
+      <button class="btn" id="askBtn">Recall</button>
+    </div>
+    <div class="result" id="askResult"></div>
+  </div>
+
+  <div>
+    <p class="section-title">Brain functions</p>
+    <div class="btn-grid">
+      <button class="btn" id="sleepBtn" title="Consolidate: retire duplicates and outdated facts">Sleep</button>
+      <button class="btn" id="replayBtn" title="Watch this brain grow from its first memory">Replay growth</button>
+      <button class="btn" id="resetView">Reset view</button>
+      <button class="btn" id="sampleBtn" title="Teaches a short sample story (about 10 API calls)">Sample story</button>
+    </div>
+  </div>
+
+  <div>
+    <p class="section-title">Legend</p>
+    <div class="legend" id="legend"></div>
+  </div>
+  <p class="hintline">Drag to rotate · scroll to zoom · click a neuron for details. Lines show how memories connect.</p>
+</aside>
+
+<aside id="detail" class="panel" aria-live="polite">
+  <button class="btn small close" id="closeDetail" aria-label="Close">✕</button>
+  <div id="detailBody"></div>
+</aside>
+
+<div id="empty"><b>This brain is empty</b>Teach it something and watch the first neurons form.</div>
+<div id="hint">Drag to rotate · Scroll to zoom · Click a neuron</div>
+<div id="toast"></div>
+
+<script type="module">
+import ForceGraph3D from "https://cdn.jsdelivr.net/npm/3d-force-graph@1.80.0/+esm";
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.183.2/+esm";
+import { UnrealBloomPass } from "https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/postprocessing/UnrealBloomPass.js/+esm";
+import { OutputPass } from "https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/postprocessing/OutputPass.js/+esm";
+
+// ------------------------------------------------------------------ constants
+const KIND = {
+  identity:     { c: "#5cc8ff", label: "Identity" },
+  preference:   { c: "#ff6ad5", label: "Preference" },
+  relationship: { c: "#ffc857", label: "Relationship" },
+  plan:         { c: "#6dffb0", label: "Plan" },
+  event:        { c: "#ff8a4c", label: "Event" },
+  knowledge:    { c: "#9d8cff", label: "Knowledge" },
+  procedure:    { c: "#3ef0e0", label: "Procedure" },
+};
+const ENTITY_C = "#dfe6ff", RETIRED_C = "#4a4f6a", QUERY_C = "#ffe28a";
+// Right hemisphere: the self (who you are, what you like, who you know).
+// Left hemisphere: the world (plans, events, knowledge, how-tos).
+const HEMI = { identity: 1, preference: 1, relationship: 1, plan: -1, event: -1, knowledge: -1, procedure: -1 };
+const LINK_STYLE = {
+  similar:  w => `rgba(120,170,255,${(0.12 + 0.55 * w).toFixed(2)})`,
+  mentions: () => "rgba(255,214,140,0.28)",
+  replaced: () => "rgba(255,80,110,0.9)",
+  probe:    () => "rgba(255,226,138,0.9)",
+};
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+
+// ------------------------------------------------------------------ state
+const state = {
+  user: store.get("engram.user", ""),
+  tenant: store.get("engram.tenant", "default"),
+  apiKey: null,
+  nodes: new Map(),      // id -> node object (kept between refreshes so positions persist)
+  rawLinks: [],          // links as {source:id, target:id, ...}
+  graph: null,           // last server payload
+  lit: new Map(),        // id -> time until which the neuron glows
+  focus: null,           // set of ids in focus (click), or null
+  probe: null,           // ids lit by the last recall
+  replay: null,          // number of facts visible during replay, or null
+  scale: 80,
+};
+
+// ------------------------------------------------------------------ api
+async function api(path, opts = {}) {
+  const headers = { "Content-Type": "application/json", "X-Tenant-Id": state.tenant };
+  if (state.apiKey) headers["X-API-Key"] = state.apiKey;
+  const res = await fetch(path, { ...opts, headers });
+  if (res.status === 401) {
+    const k = prompt("This Engram server needs an API key:");
+    if (k) { state.apiKey = k; return api(path, opts); }
+  }
+  if (!res.ok) {
+    let msg = res.statusText;
+    try { msg = (await res.json()).detail || msg; } catch {}
+    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+  }
+  return res.json();
+}
+
+function toast(msg, err = false) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "show" + (err ? " err" : "");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => (t.className = ""), err ? 6000 : 3500);
+}
+
+// ------------------------------------------------------------------ visuals
+function glowTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d");
+  const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  r.addColorStop(0, "rgba(255,255,255,1)");
+  r.addColorStop(0.12, "rgba(255,255,255,0.85)");
+  r.addColorStop(0.35, "rgba(255,255,255,0.22)");
+  r.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = r;
+  g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const GLOW = glowTexture();
+const CORE_GEO = new THREE.SphereGeometry(1, 14, 14);
+
+function textSprite(text) {
+  const c = document.createElement("canvas");
+  const g = c.getContext("2d");
+  const font = "600 44px ui-sans-serif, system-ui, sans-serif";
+  g.font = font;
+  c.width = Math.ceil(g.measureText(text).width) + 24;
+  c.height = 64;
+  g.font = font;
+  g.fillStyle = "rgba(255,255,255,0.92)";
+  g.shadowColor = "rgba(0,0,0,0.9)";
+  g.shadowBlur = 8;
+  g.fillText(text, 12, 46);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false, opacity: 0.85 }));
+  const h = 4.2;
+  s.scale.set(h * c.width / c.height, h, 1);
+  return s;
+}
+
+function colorOf(n) {
+  if (n.type === "entity") return ENTITY_C;
+  if (n.type === "query") return QUERY_C;
+  if (n.active === false) return RETIRED_C;
+  return (KIND[n.kind] || KIND.knowledge).c;
+}
+
+function makeNodeObject(n) {
+  const group = new THREE.Group();
+  const col = colorOf(n);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: GLOW, color: col, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  const core = new THREE.Mesh(CORE_GEO, new THREE.MeshBasicMaterial({ color: col, transparent: true }));
+  group.add(sprite, core);
+  if (n.type === "entity") {
+    const label = textSprite(n.name);
+    label.position.y = 5.5;
+    group.add(label);
+    n.__label = label;
+  }
+  n.__sprite = sprite;
+  n.__core = core;
+  n.__phase = Math.random() * Math.PI * 2;
+  n.__born = n.__born ?? performance.now();
+  return group;
+}
+
+// Faint particle shell in the shape of a brain: two hemispheres, cerebellum, brain stem.
+function buildShell() {
+  const pts = [];
+  const add = (x, y, z) => pts.push(x, y, z);
+  const N = 11000;
+  for (let i = 0; i < N; i++) {
+    const side = i % 2 ? 1 : -1;
+    const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2;
+    let dx = Math.sqrt(1 - u * u) * Math.cos(th), dy = Math.sqrt(1 - u * u) * Math.sin(th), dz = u;
+    // folds (gyri and sulci)
+    const fold = 1 + 0.05 * Math.sin(9 * dz + 4 * dy) * Math.sin(7 * dy - 3 * dz) + 0.025 * Math.sin(23 * dx + 17 * dz);
+    if (dx * side < 0) dx *= 0.25;      // flat inner face between hemispheres
+    if (dy < 0) dy *= 0.78;             // flatter underside
+    const r = fold * (0.94 + Math.random() * 0.08);
+    add(side * 0.42 + dx * 0.55 * r, dy * 0.62 * r, dz * 0.85 * r);
+  }
+  for (let i = 0; i < 2200; i++) {      // cerebellum
+    const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2;
+    const dx = Math.sqrt(1 - u * u) * Math.cos(th), dy = Math.sqrt(1 - u * u) * Math.sin(th), dz = u;
+    const f = 1 + 0.04 * Math.sin(30 * dy);
+    add(dx * 0.42 * f, -0.42 + dy * 0.2 * f, -0.62 + dz * 0.24 * f);
+  }
+  for (let i = 0; i < 700; i++) {       // brain stem
+    const a = Math.random() * Math.PI * 2, t = Math.random();
+    add(Math.cos(a) * 0.09, -0.35 - t * 0.5, -0.32 - t * 0.12 + Math.sin(a) * 0.09);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+  const mat = new THREE.PointsMaterial({
+    size: 0.9, color: "#3d63ff", transparent: true, opacity: 0.25,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  return new THREE.Points(geo, mat);
+}
+
+// Custom force: facts settle on the cortex of their hemisphere; concept hubs sit deeper inside.
+function brainForce() {
+  let nodes = [];
+  function force(alpha) {
+    const S = state.scale;
+    for (const n of nodes) {
+      if (n.fx != null) continue;
+      let side = 0, rx = 0.32 * S, ry = 0.4 * S, rz = 0.55 * S, target = 0.6;
+      if (n.type === "fact") {
+        side = HEMI[n.kind] ?? (n.id.charCodeAt(n.id.length - 1) % 2 ? 1 : -1);
+        rx = 0.55 * S; ry = 0.62 * S; rz = 0.85 * S; target = 0.86;
+      }
+      const cx = side * 0.42 * S;
+      const dx = (n.x || 0) - cx, dy = n.y || 0, dz = n.z || 0;
+      const d = Math.sqrt((dx / rx) ** 2 + (dy / ry) ** 2 + (dz / rz) ** 2) || 1e-6;
+      const k = ((d - target) / d) * alpha * 0.4;
+      n.vx -= dx * k; n.vy -= dy * k; n.vz -= dz * k;
+    }
+  }
+  force.initialize = ns => (nodes = ns);
+  return force;
+}
+
+// ------------------------------------------------------------------ graph setup
+const Graph = ForceGraph3D({ controlType: "orbit" })($("scene"))
+  .backgroundColor("#04050d")
+  .showNavInfo(false)
+  .nodeThreeObject(makeNodeObject)
+  .nodeLabel(n => {
+    if (n.type === "entity") return `<b>${esc(n.name)}</b><br>${n.count} memories mention this`;
+    if (n.type === "query") return `<b>Your question</b><br>${esc(n.text)}`;
+    return `${esc(n.text)}<br><span style="opacity:.6">${esc(n.kind)} · ${esc((n.valid_from || "").slice(0, 10))}${n.active ? "" : " · retired"}</span>`;
+  })
+  .linkColor(l => (LINK_STYLE[l.type] || LINK_STYLE.similar)(l.weight ?? 0.5))
+  .linkOpacity(0.5)
+  .linkWidth(l => (l.__hl ? 0.45 : l.type === "replaced" ? 0.35 : 0))
+  .linkDirectionalParticles(l => (l.__hl || l.type === "probe" ? 3 : 0))
+  .linkDirectionalParticleWidth(1.6)
+  .linkDirectionalParticleSpeed(0.012)
+  .linkDirectionalParticleColor(l => (l.type === "probe" ? QUERY_C : l.type === "mentions" ? "#ffd68c" : "#a9c4ff"))
+  .onNodeClick(n => focusNode(n))
+  .onBackgroundClick(() => clearFocus())
+  .cooldownTicks(240);
+
+Graph.d3Force("charge").strength(-28);
+Graph.d3Force("link").distance(l => (l.type === "mentions" ? 34 : l.type === "probe" ? 60 : 22 + (1 - (l.weight ?? 0.5)) * 36));
+Graph.d3Force("brain", brainForce());
+
+Graph.scene().background = new THREE.Color("#04050d");
+const shell = buildShell();
+Graph.scene().add(shell);
+
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.1, 0.5, 0.22);
+Graph.postProcessingComposer().addPass(bloom);
+Graph.postProcessingComposer().addPass(new OutputPass());
+
+const controls = Graph.controls();
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.45;
+let idleTimer;
+controls.addEventListener("start", () => { controls.autoRotate = false; clearTimeout(idleTimer); });
+controls.addEventListener("end", () => { idleTimer = setTimeout(() => { if (!state.focus) controls.autoRotate = true; }, 9000); });
+
+function defaultCamera(ms = 0) {
+  const d = state.scale * 3.1;
+  Graph.cameraPosition({ x: d * 0.55, y: d * 0.3, z: d * 0.8 }, { x: 0, y: 0, z: 0 }, ms);
+}
+defaultCamera();
+
+addEventListener("resize", () => {
+  Graph.width(innerWidth).height(innerHeight);
+  bloom.setSize(innerWidth, innerHeight);
+});
+
+// ------------------------------------------------------------------ animation loop
+function animate(t) {
+  const lit = state.lit;
+  for (const n of state.nodes.values()) {
+    if (!n.__sprite) continue;
+    const isEnt = n.type === "entity";
+    let size = isEnt ? 3.2 + 1.1 * Math.sqrt(n.count || 1) : n.type === "query" ? 16 : 11;
+    let op = n.type === "fact" && n.active === false ? 0.22 : 0.92;
+    const age = t - (n.__born || 0);
+    if (age < 1800) size *= Math.min(1, age / 350) * (1 + 1.8 * Math.exp(-age / 450)); // birth flash
+    size *= 1 + 0.07 * Math.sin(t / 650 + n.__phase);                                  // breathing
+    const until = lit.get(n.id);
+    if (until && until > t) { size *= 1.55 + 0.25 * Math.sin(t / 110); op = 1; }
+    if (state.focus && !state.focus.has(n.id)) op *= 0.18;
+    n.__sprite.scale.set(size, size, 1);
+    n.__sprite.material.opacity = op;
+    n.__core.scale.setScalar(size * 0.11);
+    n.__core.material.opacity = Math.min(1, op + 0.05);
+    if (n.__label) n.__label.material.opacity = state.focus && !state.focus.has(n.id) ? 0.12 : 0.85;
+  }
+  shell.rotation.y = 0;
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// Ambient firing: the more connections, the busier the brain.
+setInterval(() => {
+  if (document.hidden) return;
+  const links = Graph.graphData().links.filter(l => l.type !== "probe");
+  if (!links.length) return;
+  const n = Math.min(8, Math.ceil(links.length / 35));
+  for (let i = 0; i < n; i++) Graph.emitParticle(links[(Math.random() * links.length) | 0]);
+}, 260);
+
+// ------------------------------------------------------------------ data
+function intensity(nFacts) {
+  state.scale = 70 + 9 * Math.sqrt(nFacts);
+  shell.scale.setScalar(state.scale);
+  shell.material.opacity = 0.16 + Math.min(0.3, nFacts / 160);
+  bloom.strength = 1.0 + Math.min(1.1, nFacts / 70);
+}
+
+function render() {
+  const g = state.graph;
+  if (!g) return;
+  let facts = g.nodes.filter(n => n.type === "fact");
+  let visible = new Set(facts.map(n => n.id));
+  if (state.replay != null) {
+    visible = new Set(facts.slice(0, state.replay).map(n => n.id));
+  }
+  const ents = new Set();
+  for (const l of g.links) if (l.type === "mentions" && visible.has(l.source)) ents.add(l.target);
+  const keep = n => (n.type === "fact" ? visible.has(n.id) : ents.has(n.id));
+
+  const nodes = [];
+  for (const raw of g.nodes) {
+    if (!keep(raw)) continue;
+    let n = state.nodes.get(raw.id);
+    if (!n) {
+      const r = state.scale * 0.15;
+      n = { x: (Math.random() - .5) * r, y: (Math.random() - .5) * r, z: (Math.random() - .5) * r };
+      state.nodes.set(raw.id, n);
+    }
+    const wasActive = n.active;
+    Object.assign(n, raw);
+    if (n.__sprite && wasActive !== n.active) {
+      const c = colorOf(n);
+      n.__sprite.material.color.set(c);
+      n.__core.material.color.set(c);
+    }
+    nodes.push(n);
+  }
+  const ids = new Set(nodes.map(n => n.id));
+  const links = g.links
+    .filter(l => ids.has(l.source) && ids.has(l.target))
+    .map(l => ({ ...l }));
+
+  if (state.probe) {
+    let q = state.nodes.get("__query");
+    if (!q) { q = { id: "__query", type: "query", x: 0, y: 0, z: 0 }; state.nodes.set("__query", q); }
+    Object.assign(q, { text: state.probe.query, fx: 0, fy: state.scale * 0.72, fz: state.scale * 0.35 });
+    nodes.push(q);
+    for (const id of state.probe.ids) if (ids.has(id)) links.push({ source: "__query", target: id, type: "probe" });
+  }
+
+  // drop node objects that disappeared (forgotten)
+  for (const id of [...state.nodes.keys()]) if (!nodes.find(n => n.id === id)) state.nodes.delete(id);
+
+  intensity(nodes.filter(n => n.type === "fact" && n.active).length);
+  Graph.graphData({ nodes, links });
+  applyHighlight();
+
+  const s = g.stats;
+  $("sNeurons").textContent = state.replay != null ? [...visible].length : s.neurons;
+  $("sLinks").textContent = links.filter(l => l.type !== "probe").length;
+  $("sConcepts").textContent = ents.size;
+  $("sRetired").textContent = s.retired;
+  $("empty").style.display = facts.length ? "none" : "block";
+}
+
+async function refresh({ lightNew = true } = {}) {
+  if (!state.user) { state.graph = { nodes: [], links: [], stats: { neurons: 0, retired: 0 } }; render(); return; }
+  const before = new Set(state.nodes.keys());
+  state.graph = await api(`/v1/graph/${encodeURIComponent(state.user)}`);
+  const now = performance.now();
+  if (lightNew && before.size) {
+    for (const n of state.graph.nodes) if (!before.has(n.id)) state.lit.set(n.id, now + 3500);
+  }
+  render();
+}
+
+async function loadBrains(select) {
+  const { brains } = await api("/v1/brains");
+  const sel = $("brainSelect");
+  const names = brains.map(b => b.user_id);
+  if (state.user && !names.includes(state.user)) names.unshift(state.user);
+  if (!state.user && names.length) state.user = names[0];
+  sel.innerHTML = names.length
+    ? names.map(u => {
+        const b = brains.find(x => x.user_id === u);
+        return `<option value="${esc(u)}">${esc(u)}${b ? ` — ${b.facts} memories` : " — new"}</option>`;
+      }).join("")
+    : `<option value="">No brains yet — create one</option>`;
+  sel.value = state.user || "";
+}
+
+function switchBrain(name) {
+  state.user = name;
+  store.set("engram.user", name);
+  state.nodes.clear();
+  state.lit.clear();
+  state.probe = null;
+  state.focus = null;
+  closeDetail();
+  $("askResult").className = "result";
+  refresh({ lightNew: false }).then(() => defaultCamera(800)).catch(e => toast(e.message, true));
+}
+
+// ------------------------------------------------------------------ focus + detail panel
+function neighbours(id) {
+  const out = [];
+  for (const l of Graph.graphData().links) {
+    const s = l.source.id ?? l.source, t = l.target.id ?? l.target;
+    if (s === id) out.push({ id: t, link: l });
+    else if (t === id) out.push({ id: s, link: l, reverse: true });
+  }
+  return out;
+}
+
+function applyHighlight() {
+  const f = state.focus;
+  for (const l of Graph.graphData().links) {
+    const s = l.source.id ?? l.source, t = l.target.id ?? l.target;
+    l.__hl = !!(f && f.has(s) && f.has(t) && (s === state.focusId || t === state.focusId));
+  }
+  Graph.linkWidth(Graph.linkWidth()).linkDirectionalParticles(Graph.linkDirectionalParticles());
+}
+
+function focusNode(n, fly = true) {
+  if (!n || n.type === "query") return;
+  state.focusId = n.id;
+  state.focus = new Set([n.id, ...neighbours(n.id).map(x => x.id)]);
+  applyHighlight();
+  controls.autoRotate = false;
+  if (fly) {
+    const dist = 120;
+    const len = Math.hypot(n.x, n.y, n.z) || 1;
+    const r = 1 + dist / len;
+    Graph.cameraPosition({ x: n.x * r, y: n.y * r, z: n.z * r }, n, 1100);
+  }
+  showDetail(n);
+}
+
+function clearFocus() {
+  state.focus = null;
+  state.focusId = null;
+  applyHighlight();
+  closeDetail();
+}
+
+const nodeById = id => state.nodes.get(id);
+const dateOf = s => (s ? new Date(s).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
+
+function relRow(id, label, weight) {
+  const n = nodeById(id);
+  if (!n) return "";
+  const text = n.type === "entity" ? n.name : n.text;
+  const c = colorOf(n);
+  const bar = weight != null ? `<span class="bar"><i style="width:${Math.round(weight * 100)}%"></i></span>` : "";
+  return `<div class="rel" data-id="${esc(id)}"><span class="dot" style="--c:${c}"></span><span class="txt">${esc(text)}${label ? ` <span style="color:var(--muted)">· ${esc(label)}</span>` : ""}</span>${bar}</div>`;
+}
+
+function showDetail(n) {
+  const body = $("detailBody");
+  const nb = neighbours(n.id);
+  let html = "";
+  if (n.type === "entity") {
+    html += `<span class="chip"><span class="dot" style="--c:#fff"></span>Concept</span>`;
+    html += `<div class="fact-text">${esc(n.name)}</div>`;
+    html += `<p class="section-title">${n.count} memories mention this</p>`;
+    html += nb.filter(x => x.link.type === "mentions").map(x => relRow(x.id)).join("");
+  } else {
+    const k = KIND[n.kind] || KIND.knowledge;
+    html += `<span class="chip"><span class="dot" style="--c:${k.c}"></span>${esc(k.label)}</span>`;
+    html += n.shared ? `<span class="chip">Shared company memory</span>` : "";
+    html += `<div class="fact-text">${esc(n.text)}</div>`;
+    html += `<dl class="kv">
+      <dt>Status</dt><dd class="${n.active ? "status-active" : "status-retired"}">${n.active ? "Active — used in recall" : "Retired on " + esc(dateOf(n.valid_to))}</dd>
+      <dt>Learned</dt><dd>${esc(dateOf(n.valid_from))}</dd>
+      <dt>Source</dt><dd>${esc(n.speaker)} · trust: ${esc(n.trust)}</dd>
+    </dl>`;
+    if (n.episode) {
+      html += `<p class="section-title">Came from this message</p><blockquote>“${esc(n.episode.content)}”<br><span style="color:var(--muted);font-size:12px">${esc(n.episode.speaker)} · ${esc(dateOf(n.episode.occurred_at))}</span></blockquote>`;
+    }
+    const replacedBy = nb.filter(x => x.link.type === "replaced" && !x.reverse);
+    const replaces = nb.filter(x => x.link.type === "replaced" && x.reverse);
+    if (replacedBy.length) html += `<p class="section-title">Replaced by</p>` + replacedBy.map(x => relRow(x.id)).join("");
+    if (replaces.length) html += `<p class="section-title">Replaced an older memory</p>` + replaces.map(x => relRow(x.id)).join("");
+    const ents = nb.filter(x => x.link.type === "mentions");
+    if (ents.length) {
+      html += `<p class="section-title">Concepts</p><div>` + ents.map(x => {
+        const e = nodeById(x.id);
+        return e ? `<span class="chip click" data-id="${esc(x.id)}"><span class="dot" style="--c:#fff"></span>${esc(e.name)}</span>` : "";
+      }).join("") + `</div>`;
+    }
+    const sim = nb.filter(x => x.link.type === "similar").sort((a, b) => b.link.weight - a.link.weight);
+    if (sim.length) html += `<p class="section-title" style="margin-top:8px">Related memories</p>` + sim.map(x => relRow(x.id, null, x.link.weight)).join("");
+    if (n.episode) html += `<div style="margin-top:16px"><button class="btn small danger" id="forgetBtn">Forget this message</button></div>`;
+  }
+  body.innerHTML = html;
+  body.querySelectorAll("[data-id]").forEach(el => el.addEventListener("click", () => focusNode(nodeById(el.dataset.id))));
+  const fb = $("forgetBtn");
+  if (fb) fb.onclick = async () => {
+    if (!confirm("Permanently erase this message and every memory that came from it?")) return;
+    try {
+      const r = await api(`/v1/episodes/${encodeURIComponent(n.episode.id)}`, { method: "DELETE" });
+      toast(`Erased ${r.facts_deleted} memories`);
+      clearFocus();
+      await refresh();
+      loadBrains();
+    } catch (e) { toast(e.message, true); }
+  };
+  $("detail").classList.add("open");
+}
+
+function closeDetail() { $("detail").classList.remove("open"); }
+
+// ------------------------------------------------------------------ actions
+function busy(btn, on, label) {
+  btn.disabled = on;
+  if (on) { btn.dataset.label = btn.textContent; btn.textContent = label; }
+  else if (btn.dataset.label) btn.textContent = btn.dataset.label;
+}
+
+async function teach(text, when) {
+  const body = { user_id: state.user, content: text };
+  if (when) body.occurred_at = when;
+  const r = await api("/v1/remember", { method: "POST", body: JSON.stringify(body) });
+  await refresh();
+  return r;
+}
+
+$("teachBtn").onclick = async () => {
+  const text = $("teachText").value.trim();
+  if (!text) return;
+  if (!state.user) return toast("Create a brain first", true);
+  const b = $("teachBtn");
+  busy(b, true, "Forming memories…");
+  try {
+    const r = await teach(text);
+    $("teachText").value = "";
+    toast(r.facts.length ? `${r.facts.length} new neuron${r.facts.length > 1 ? "s" : ""} formed` : "Nothing worth remembering in that");
+    loadBrains();
+  } catch (e) { toast(e.message, true); }
+  busy(b, false);
+};
+$("teachText").addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("teachBtn").click(); });
+
+$("askBtn").onclick = async () => {
+  const q = $("askText").value.trim();
+  if (!q || !state.user) return;
+  const b = $("askBtn");
+  busy(b, true, "…");
+  try {
+    const r = await api("/v1/recall", { method: "POST", body: JSON.stringify({ user_id: state.user, query: q, token_budget: 300 }) });
+    const ids = r.facts.map(f => f.id);
+    const until = performance.now() + 8000;
+    ids.forEach(id => state.lit.set(id, until));
+    state.probe = ids.length ? { query: q, ids } : null;
+    clearFocus();
+    render();
+    const box = $("askResult");
+    box.className = "result show";
+    box.innerHTML = r.route === "none"
+      ? `<div class="meta">No memory needed · 0 tokens · ${r.latency_ms} ms</div>The brain stayed quiet: small talk doesn’t need recall.`
+      : ids.length
+        ? `<div class="meta">${ids.length} memories · ${r.context_tokens} tokens · ${r.latency_ms} ms</div><ul>${r.facts.map(f => `<li>${esc(f.text)}</li>`).join("")}</ul>`
+        : `<div class="meta">0 tokens · ${r.latency_ms} ms</div>Nothing relevant: the brain sends nothing rather than noise.`;
+  } catch (e) { toast(e.message, true); }
+  busy(b, false);
+};
+$("askText").addEventListener("keydown", e => { if (e.key === "Enter") $("askBtn").click(); });
+
+$("sleepBtn").onclick = async () => {
+  if (!state.user) return;
+  const b = $("sleepBtn");
+  busy(b, true, "Sleeping…");
+  try {
+    const before = new Set(state.graph.nodes.filter(n => n.type === "fact" && n.active).map(n => n.id));
+    const r = await api("/v1/sleep", { method: "POST", body: JSON.stringify({ user_id: state.user }) });
+    await refresh();
+    const now = performance.now();
+    for (const n of state.graph.nodes) if (before.has(n.id) && !n.active) state.lit.set(n.id, now + 4000);
+    toast(`Sleep done: ${r.outdated_retired} outdated and ${r.duplicates_retired} duplicate memories retired`);
+  } catch (e) { toast(e.message, true); }
+  busy(b, false);
+};
+
+$("replayBtn").onclick = () => {
+  const g = state.graph;
+  const facts = g ? g.nodes.filter(n => n.type === "fact") : [];
+  if (!facts.length) return;
+  clearFocus();
+  state.probe = null;
+  state.nodes.clear();
+  state.replay = 0;
+  const label = $("replayDate");
+  label.style.display = "block";
+  const step = Math.max(120, Math.min(600, 9000 / facts.length));
+  const tick = () => {
+    state.replay++;
+    const f = facts[state.replay - 1];
+    if (f) { state.lit.set(f.id, performance.now() + 1500); label.textContent = dateOf(f.valid_from); }
+    render();
+    if (state.replay < facts.length) setTimeout(tick, step);
+    else setTimeout(() => { state.replay = null; label.style.display = "none"; render(); }, 1200);
+  };
+  tick();
+};
+
+$("resetView").onclick = () => { clearFocus(); defaultCamera(900); controls.autoRotate = true; };
+
+$("brainSelect").onchange = e => switchBrain(e.target.value);
+$("createBrain").onclick = async () => {
+  const name = $("newBrain").value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  if (!name) return toast("Give the brain a name (letters, numbers, - or _)", true);
+  $("newBrain").value = "";
+  state.user = name;
+  await loadBrains();
+  switchBrain(name);
+  toast(`Brain “${name}” created. Teach it something.`);
+};
+$("newBrain").addEventListener("keydown", e => { if (e.key === "Enter") $("createBrain").click(); });
+$("closeDetail").onclick = clearFocus;
+addEventListener("keydown", e => { if (e.key === "Escape") clearFocus(); });
+
+const SAMPLE = [
+  ["2026-01-10T09:00:00Z", "Hi! I'm Sneha. I lead the payments team at Acme and I live in Delhi."],
+  ["2026-01-10T09:02:00Z", "I prefer short answers with code examples in Python."],
+  ["2026-01-22T11:00:00Z", "Rahul is my manager. Priya and Arjun are engineers on my team."],
+  ["2026-02-02T10:00:00Z", "Our Q2 launch is code-named Bluebird and ships on 15 June. It adds UPI autopay to the Acme checkout."],
+  ["2026-03-14T16:30:00Z", "Priya owns the Bluebird fraud checks. Arjun is building the UPI retry logic."],
+  ["2026-04-05T08:15:00Z", "When I deploy, always run the payments test suite first and post in #payments-release."],
+  ["2026-05-19T19:00:00Z", "I'm learning Rust in the evenings and I love trekking in the Himalayas."],
+  ["2026-06-20T08:30:00Z", "Big news: I moved to Bangalore last week. Bluebird slipped to 1 July."],
+];
+$("sampleBtn").onclick = async () => {
+  if (!state.user) {
+    state.user = "sneha";
+    await loadBrains();
+    switchBrain("sneha");
+  }
+  if (!confirm(`Teach brain “${state.user}” a short sample story? This makes about ${SAMPLE.length + 2} API calls.`)) return;
+  const b = $("sampleBtn");
+  busy(b, true, "Teaching…");
+  try {
+    for (let i = 0; i < SAMPLE.length; i++) {
+      b.textContent = `Teaching ${i + 1}/${SAMPLE.length}`;
+      await teach(SAMPLE[i][1], SAMPLE[i][0]);
+    }
+    b.textContent = "Sleeping…";
+    const r = await api("/v1/sleep", { method: "POST", body: JSON.stringify({ user_id: state.user }) });
+    await refresh();
+    toast(`Story learned. Sleep retired ${r.outdated_retired + r.duplicates_retired} outdated memories. Try asking: “Where does Sneha live?”`);
+    loadBrains();
+  } catch (e) { toast(e.message, true); }
+  busy(b, false);
+};
+
+// legend
+$("legend").innerHTML =
+  Object.values(KIND).map(k => `<span style="--c:${k.c}">${k.label}</span>`).join("") +
+  `<span style="--c:#fff">Concept hub</span><span style="--c:${RETIRED_C}">Retired</span>` +
+  `<span class="line" style="--c:#78aaff">Related</span><span class="line" style="--c:#ff506e">Replaced</span>`;
+
+// Handle for debugging from the browser console.
+window.engram = { Graph, state, focusNode, clearFocus };
+
+// ------------------------------------------------------------------ boot
+(async () => {
+  try {
+    await loadBrains();
+    await refresh({ lightNew: false });
+  } catch (e) { toast("Could not reach Engram: " + e.message, true); }
+  $("loading").remove();
+})();
+</script>
+</body>
+</html>

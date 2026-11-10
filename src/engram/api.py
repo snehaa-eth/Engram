@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from functools import lru_cache
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from engram import __version__
@@ -56,6 +58,15 @@ app = FastAPI(title="Engram", version=__version__,
               description="Fast, low-token long-term memory for AI agents.")
 
 
+WEB_DIR = Path(__file__).parent / "web"
+
+
+@app.get("/", include_in_schema=False)
+def brain_map() -> FileResponse:
+    """The interactive 3D brain map."""
+    return FileResponse(WEB_DIR / "index.html")
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "version": __version__}
@@ -99,3 +110,13 @@ def forget_user(user_id: str, tenant: str = Depends(get_tenant)) -> dict:
 @app.get("/v1/stats")
 def stats(tenant: str = Depends(get_tenant)) -> dict:
     return get_brain().stats(tenant)
+
+
+@app.get("/v1/brains")
+def brains(tenant: str = Depends(get_tenant)) -> dict:
+    return {"brains": get_brain().brains(tenant)}
+
+
+@app.get("/v1/graph/{user_id}")
+def graph(user_id: str, tenant: str = Depends(get_tenant)) -> dict:
+    return get_brain().graph(tenant, user_id)

@@ -38,6 +38,10 @@ def hybrid_search(store: Store, embedder: Embedder, tenant: str, users: list[str
     matrix = np.stack([f.embedding for f in facts])
     qvec = embedder.embed([query], "query")[0]
     dense = matrix @ qvec  # cosine similarity, because all vectors are unit length
+    # Rescale so "unrelated" maps to 0. Each embedding model has its own baseline:
+    # Gemini rates unrelated text ~0.5, so raw cosine would let everything through.
+    floor = getattr(embedder, "floor", 0.0)
+    dense = np.clip((dense - floor) / (1.0 - floor), 0.0, 1.0)
 
     candidates = set(np.argsort(-dense)[:k].tolist())
     sparse_raw = store.bm25_search(tenant, users, query, k)
@@ -51,7 +55,7 @@ def hybrid_search(store: Store, embedder: Embedder, tenant: str, users: list[str
 
     out = []
     for i in candidates:
-        score = dense_weight * max(float(dense[i]), 0.0) + (1 - dense_weight) * sparse.get(i, 0.0)
+        score = dense_weight * float(dense[i]) + (1 - dense_weight) * sparse.get(i, 0.0)
         out.append(Scored(facts[i], score))
     out.sort(key=lambda s: s.score, reverse=True)
     return out
@@ -62,8 +66,8 @@ def render_fact(f: Fact) -> str:
     return f"- [{f.valid_from[:10]}] {f.text} (source: {f.trust})"
 
 
-def select_mmr(scored: list[Scored], token_budget: int, min_score: float = 0.15,
-               relative_floor: float = 0.4, lam: float = 0.7, dup_sim: float = 0.95) -> list[Fact]:
+def select_mmr(scored: list[Scored], token_budget: int, min_score: float = 0.1,
+               relative_floor: float = 0.15, lam: float = 0.7, dup_sim: float = 0.95) -> list[Fact]:
     if not scored:
         return []
     best = scored[0].score

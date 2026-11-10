@@ -29,3 +29,23 @@ def test_api_key_decides_tenant(tmp_path, monkeypatch):
     r = c.post("/v1/recall", json={"user_id": "u", "query": "Bluebird launch plan"},
                headers={"X-API-Key": "keyB", "X-Tenant-Id": "acme"}).json()
     assert r["facts"] == []
+
+
+def test_brain_map_endpoints(tmp_path, monkeypatch):
+    c = make_client(tmp_path, monkeypatch)
+    h = {"X-Tenant-Id": "acme"}
+    c.post("/v1/remember", json={"user_id": "sneha", "content": "I live in Delhi with Rahul."}, headers=h)
+    c.post("/v1/remember", json={"user_id": "sneha", "content": "I live in Bangalore with Rahul now."}, headers=h)
+    c.post("/v1/sleep", json={"user_id": "sneha"}, headers=h)
+
+    assert [b["user_id"] for b in c.get("/v1/brains", headers=h).json()["brains"]] == ["sneha"]
+    assert c.get("/v1/brains", headers={"X-Tenant-Id": "globex"}).json()["brains"] == []
+
+    g = c.get("/v1/graph/sneha", headers=h).json()
+    facts = [n for n in g["nodes"] if n["type"] == "fact"]
+    assert len(facts) == 2 and sum(not f["active"] for f in facts) == 1   # history is kept, marked retired
+    assert any(n["type"] == "entity" and n["name"] == "Rahul" for n in g["nodes"])
+    assert {l["type"] for l in g["links"]} >= {"mentions", "replaced"}
+    assert all(f["episode"]["content"] for f in facts)                     # each neuron knows its source
+
+    assert c.get("/", headers=h).status_code == 200                      # the 3D map page is served

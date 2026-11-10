@@ -42,6 +42,8 @@ class HashEmbedder:
     def __init__(self, dim: int = 512):
         self.dim = dim
         self.name = f"hash:{dim}"
+        # Cosine score that unrelated texts typically get (see retrieve.calibrate).
+        self.floor = 0.0
 
     def embed(self, texts: list[str], kind: str) -> np.ndarray:
         out = np.zeros((len(texts), self.dim), dtype=np.float32)
@@ -65,6 +67,9 @@ class GeminiEmbedder:
         self.model = model
         self.dim = dim
         self.name = f"gemini:{model}:{dim}"
+        # Gemini gives unrelated texts a cosine of about 0.45-0.55, so scores are
+        # rescaled from this floor. Measured on a small demo; tune on the benchmark.
+        self.floor = float(os.getenv("ENGRAM_DENSE_FLOOR", "0.55"))
 
     def embed(self, texts: list[str], kind: str) -> np.ndarray:
         task = "RETRIEVAL_QUERY" if kind == "query" else "RETRIEVAL_DOCUMENT"
@@ -86,6 +91,7 @@ class CachedEmbedder:
         self._cache = cache
         self.name = inner.name
         self.dim = inner.dim
+        self.floor = getattr(inner, "floor", 0.0)
 
     def embed(self, texts: list[str], kind: str) -> np.ndarray:
         keys = [DiskCache.key("emb", self.name, kind, t) for t in texts]

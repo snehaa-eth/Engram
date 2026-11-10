@@ -250,7 +250,8 @@ class Store:
 
     def bm25_search(self, tenant: str, users: list[str], query: str, k: int) -> list[tuple[str, float]]:
         """Keyword search. Returns (fact_id, score) with higher = better."""
-        words = [w for w in re.findall(r"\w+", query.lower()) if w not in _STOPWORDS]
+        words = [w for w in re.findall(r"\w+", query.lower())
+                 if len(w) > 1 and w not in _STOPWORDS]
         if not words:
             return []
         match = " OR ".join(f'"{w}"' for w in dict.fromkeys(words))
@@ -272,6 +273,59 @@ class Store:
                 "SELECT text FROM profiles WHERE tenant_id=? AND user_id=?", (tenant, user)
             ).fetchone()
         return row[0] if row else ""
+
+    # ---------- visualisation reads (the brain map) ----------
+
+    def all_facts(self, tenant: str, users: list[str]) -> list[Fact]:
+        """Every fact, including retired ones (the map shows history too)."""
+        marks = ",".join("?" * len(users))
+        with self._lock:
+            rows = self._conn.execute(
+                f"SELECT {_FACT_COLS} FROM facts WHERE tenant_id=? AND user_id IN ({marks}) "
+                "ORDER BY valid_from, created_at",
+                (tenant, *users),
+            ).fetchall()
+        return [_row_to_fact(r) for r in rows]
+
+    def entities_for(self, tenant: str, fact_ids: list[str]) -> dict[str, list[str]]:
+        if not fact_ids:
+            return {}
+        marks = ",".join("?" * len(fact_ids))
+        out: dict[str, list[str]] = {}
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT fe.fact_id, e.name FROM fact_entities fe JOIN entities e ON e.id = fe.entity_id "
+                f"WHERE e.tenant_id=? AND fe.fact_id IN ({marks})",
+                (tenant, *fact_ids),
+            ).fetchall()
+        for fid, name in rows:
+            out.setdefault(fid, []).append(name)
+        return out
+
+    def get_episodes(self, tenant: str, ids: list[str]) -> dict[str, dict]:
+        if not ids:
+            return {}
+        marks = ",".join("?" * len(ids))
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, speaker, source, trust, content, occurred_at FROM episodes "
+                f"WHERE tenant_id=? AND id IN ({marks})",
+                (tenant, *ids),
+            ).fetchall()
+        keys = ("id", "speaker", "source", "trust", "content", "occurred_at")
+        return {r[0]: dict(zip(keys, r)) for r in rows}
+
+    def list_users(self, tenant: str) -> list[dict]:
+        """One row per user ("brain") in the tenant, most recently active first."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT e.user_id, COUNT(DISTINCT e.id), MAX(e.occurred_at), "
+                "(SELECT COUNT(*) FROM facts f WHERE f.tenant_id=e.tenant_id AND f.user_id=e.user_id "
+                " AND f.valid_to IS NULL) "
+                "FROM episodes e WHERE e.tenant_id=? GROUP BY e.user_id ORDER BY MAX(e.occurred_at) DESC",
+                (tenant,),
+            ).fetchall()
+        return [{"user_id": u, "messages": m, "last_active": t, "facts": f} for u, m, t, f in rows]
 
     def stats(self, tenant: str) -> dict:
         with self._lock:
